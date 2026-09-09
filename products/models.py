@@ -1,5 +1,7 @@
 from django.db import models
 import uuid
+from django.db.models import F
+from django.db import transaction 
 # Create your models here.
 
 class Category(models.Model):
@@ -22,7 +24,7 @@ class Category(models.Model):
         return self.name
     
     
-class products(models.Model):
+class Product(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100) 
     user = models.ForeignKey('user.User', on_delete=models.CASCADE, related_name='products')
@@ -38,5 +40,39 @@ class products(models.Model):
     in_sale = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now_add=True)
-    
-    
+
+class OrderItem(models.Model):
+    order = models.ForeignKey('Order', on_delete=models.CASCADE, related_name='order_items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='order_items')
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_place=2)
+
+    def __str__(self):
+        return f"{self.quantity} x {self.product.name} in order {self.order.id}"
+
+class Order(models.Model):
+     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+     user = models.ForeignKey('user.User', on_delete=models.CASCADE, related_name='orders')
+     products = models.ManyToManyField(Product, related_name = 'orders')
+     is_active = models.ManyToManyField(default=True)
+     created_at = models.DateTimeField(auto_now_add=True)
+     upated_at = models.DateTimeField(auto_now=True)
+     def _str_(self):
+         return f"Order {self.id} by {self.user.username}"
+      
+@transaction.atomic
+def create_order(user, cart_items):
+    order = Order.objects.create(
+        user=user,
+        is_active=True
+    )
+
+    for item in cart_items:
+        OrderItem.objects.create(
+            order=order,
+            product=item.product,
+            quantity=item.quantity,
+            unit_price=item.product.price
+        )
+
+    return order
